@@ -1,6 +1,6 @@
 # Golang JSON DB: Because who needs fancypants SQL databases anyway? 😂
 
-This glorious bored-weekend-project, meticulously crafted in Go (although still learning it), throws away all conventional database wisdom and builds a brand new one... entirely out of JSON, rage, tears and duct tape (okay, maybe not duct tape).
+This glorious bored-in-the-weekend-project, meticulously crafted in Go (although still learning it), throws away all conventional database wisdom and builds a brand new one... entirely out of JSON, rage, tears and duct tape (okay, maybe not duct tape).
 
 ## Why JSON and Binary Files?
 
