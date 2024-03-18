@@ -180,6 +180,38 @@ func (t *Table) Insert(data string) error {
 	return nil
 }
 
+func (t *Table) SelectAll() ([]map[string]interface{}, error) {
+	// Open data file
+	f, err := os.Open(fmt.Sprintf("./data/%s/data.bin", t.name))
+	defer f.Close()
+	if err != nil {
+		return nil, fmt.Errorf("Error opening data file: %s", err)
+	}
+
+	// Read data file
+	var data []map[string]interface{}
+	for {
+		var dataLen uint64
+		err = binary.Read(f, binary.LittleEndian, &dataLen)
+		if err != nil {
+			break
+		}
+		dataBytes := make([]byte, dataLen)
+		err = binary.Read(f, binary.LittleEndian, &dataBytes)
+		if err != nil {
+			return nil, fmt.Errorf("Error reading data from file: %s", err)
+		}
+		var jsonData map[string]interface{}
+		err = json.Unmarshal(dataBytes, &jsonData)
+		if err != nil {
+			return nil, fmt.Errorf("Error unmarshalling data: %s", err)
+		}
+		data = append(data, jsonData)
+	}
+
+	return data, nil
+}
+
 func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition int64, dataLen int) error {
 	// Load schema to json
 	var jsonSchema JSONSchemaForValidation
@@ -201,8 +233,7 @@ func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition i
 				}
 				idx := t.boolIndexes[key]
 				idx.Insert(value.(bool), id)
-				go idx.SaveToFile(fmt.Sprintf("b_%s_idx.bin", key))
-				go idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/b_%s_idx.bin", t.name, key))
+				idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/b_%s_idx.bin", t.name, key))
 				continue
 			}
 			if jsonSchema.Properties[key].Type == "integer" {
@@ -211,7 +242,7 @@ func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition i
 				}
 				idx := t.intIndexes[key]
 				idx.Insert(int64(value.(float64)), id)
-				go idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/i_%s_idx.bin", t.name, key))
+				idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/i_%s_idx.bin", t.name, key))
 				continue
 			}
 			if jsonSchema.Properties[key].Type == "number" {
@@ -220,7 +251,7 @@ func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition i
 				}
 				idx := t.floatIndexes[key]
 				idx.Insert(value.(float64), id)
-				go idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/f_%s_idx.bin", t.name, key))
+				idx.SaveToFile(fmt.Sprintf("./data/%s/indexes/f_%s_idx.bin", t.name, key))
 				continue
 			}
 			if jsonSchema.Properties[key].Type == "string" {

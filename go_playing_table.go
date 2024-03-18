@@ -40,7 +40,16 @@ func main() {
 		}
 	}
 
-	for _, str := range strs {
-		table.Insert(fmt.Sprintf(`{ "id": "id%s", "name": "%s", "value": %d, "cost": %f }`, randomString(30), str, rand.Int63n(100000), rand.Float32()))
+	for i, str := range strs {
+		table.Insert(fmt.Sprintf(`{ "id": "id%s", "name": "%s", "value": %d, "cost": %f }`, i, str, rand.Int63n(100000), rand.Float32()))
 	}
+
+	data, err := table.SelectAll()
+
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(data)
+	fmt.Println(len(data))
 }
