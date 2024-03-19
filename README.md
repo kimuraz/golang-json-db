@@ -1,4 +1,4 @@
-# Golang JSON DB: Because who needs fancypants SQL databases anyway? 😂
+# Golang JSON DB: Because who needs fancypants :jeans: SQL databases anyway? :rofl:
 
 This glorious bored-in-the-weekend-project, meticulously crafted in Go (although still learning it), throws away all conventional database wisdom and builds a brand new one... entirely out of JSON, rage, tears and duct tape (okay, maybe not duct tape).
 
@@ -7,7 +7,7 @@ This glorious bored-in-the-weekend-project, meticulously crafted in Go (although
 - Flexibility: JSON lets us store pretty much anything, from your grandma's secret cookie recipe to your cat's sleeping positions (both equally valuable data, of course).
 - Speed: Binary files are like ninjas of data storage - fast, silent, and efficient. Perfect for when you need to retrieve your cat memes in a flash.
 
-## But Wait, There's More! 🤯
+## But Wait, There's More! :exploding_head:
 
 This bad boy also boasts:
 
@@ -19,6 +19,23 @@ This bad boy also boasts:
 ## Getting Started (Because we know you're itching to try it out)
 
 Clone this repo.
+
 Grab a Go (1.22+) compiler (you know the drill).
+
 Look around the code and run what you like!
+
 Not ready yet, so just play around.
+
+## Running sockets server/client :handshake:
+
+I know U are DP-ly disappointed to read this, because these are TCP sockets and this joke is really lame.
+
+On one session:
+```bash
+$ go run server.go sql.go
+```
+
+Second session:
+```bash
+$ go run client.go
+```
