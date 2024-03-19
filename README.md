@@ -28,7 +28,7 @@ Not ready yet, so just play around.
 
 ## Running sockets server/client :handshake:
 
-I know U are DP-ly disappointed to read this, because these are TCP sockets and this joke is really lame.
+I know U are DP-ly disappointed to read this because these are TCP sockets and this joke is really lame.
 
 On one session:
 ```bash
