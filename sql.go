@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// TODO: Check this https://marianogappa.github.io/software/2019/06/05/lets-build-a-sql-parser-in-go/
+
 type SQLCommand struct {
 	SQL          string   `json:"sql"`
 	Verb         string   `json:"verb"`
