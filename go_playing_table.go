@@ -3,31 +3,25 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
 func randomString(length int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-	// Choose between math/rand and crypto/rand:
-	bytes := make([]byte, length)
-
+	var str string
 	// Less secure, but faster (math/rand):
 	rand.Seed(time.Now().UnixNano())
-	for i := range bytes {
-		bytes[i] = letters[rand.Intn(len(letters))]
+	for i := 0; i < length; i++ {
+		str += strings.Split(letters, "")[rand.Intn(len(letters))]
 	}
 
-	// More secure (crypto/rand):
-	if _, err := rand.Read(bytes); err != nil {
-		panic(err) // Handle the error appropriately
-	}
-
-	return string(bytes)
+	return str
 }
 
 func main() {
-	table, err := NewTable("test", `{ "$schema": "http://json-schema.org/draft-04/schema#", "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "integer" }, "cost": { "type": "number" } }, "required": [ "id", "name", "value" ] }`)
+	table, err := NewTable("test", `{ "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "integer" }, "cost": { "type": "number" } }, "required": [ "id", "name", "value" ] }`)
 	if err != nil {
 		panic(err)
 	}
@@ -36,11 +30,12 @@ func main() {
 	strs := make([]string, 1000)
 	for i := 0; i < 1000; i++ {
 		for j := 0; j < rand.Intn(20)+1; j++ {
-			strs[j] = randomString(rand.Intn(20))
+			strs[i] += randomString(rand.Intn(20)+1) + " "
 		}
 	}
 
 	for i, str := range strs {
+		fmt.Println(str)
 		table.Insert(fmt.Sprintf(`{ "id": "id%s", "name": "%s", "value": %d, "cost": %f }`, i, str, rand.Int63n(100000), rand.Float32()))
 	}
 
