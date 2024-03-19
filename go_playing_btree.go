@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"github.com/kimuraz/golang-json-db/utils"
+	"os"
 	"strings"
 )
 
@@ -32,5 +34,31 @@ func main() {
 		fmt.Println(id)
 	}
 
-	btree.PrintTree()
+	firstStr := btree.String()
+
+	f, err := os.Create("b1.bin")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	btree2 := utils.BTree{}
+	enconder := gob.NewEncoder(f)
+	err = enconder.Encode(btree)
+	if err != nil {
+		fmt.Println(err)
+	}
+	f.Close()
+
+	f, err = os.Open("b1.bin")
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = gob.NewDecoder(f).Decode(&btree2)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	secondStr := btree2.String()
+
+	fmt.Println(firstStr == secondStr)
 }

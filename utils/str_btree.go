@@ -19,6 +19,24 @@ func NewBTree() *BTree {
 	return &BTree{}
 }
 
+func (b *BTree) String() string {
+	return b.Root.string()
+}
+
+func (n *BTreeNode) string() string {
+	if n == nil {
+		return ""
+	}
+	var left, right string
+	if n.Left != nil {
+		left = n.Left.string()
+	}
+	if n.Right != nil {
+		right = n.Right.string()
+	}
+	return fmt.Sprintf("%s: %v\n%s%s", n.Key, n.Value, left, right)
+}
+
 func (b *BTree) Insert(key string, value string) {
 	if b.Root == nil {
 		b.Root = &BTreeNode{Key: key, Value: map[string]bool{value: true}}
