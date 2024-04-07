@@ -28,14 +28,37 @@ Not ready yet, so just play around.
 
 ## Running sockets server/client :handshake:
 
-I know U are DP-ly disappointed to read this because these are TCP sockets and this joke is really lame.
-
-On one session:
+Run the server:
 ```bash
-$ go run server.go sql.go
+$ make run-server
 ```
 
-Second session:
+In another terminal session, run the client:
+
 ```bash
-$ go run client.go
+$ make run-client
+```
+
+## Makefile help
+
+```bash
+$ make help
+```
+
+## CLI Commands
+
+```
+NAME:
+   gjdb - Golang JSON DB is a fun simple project implementing a JSON-based db from scratch
+
+USAGE:
+   gjdb [global options] command [command options] 
+
+COMMANDS:
+   server, svr  Server commands, it uses config.json by default
+   client, cl   Client commands
+   help, h      Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --help, -h  show help
 ```

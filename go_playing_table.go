@@ -20,7 +20,7 @@ func randomString(length int) string {
 	return str
 }
 
-func main() {
+func PlayingWithTables() {
 	table, err := NewTable("test", `{ "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "integer" }, "cost": { "type": "number" } }, "required": [ "id", "name", "value" ] }`)
 	if err != nil {
 		panic(err)

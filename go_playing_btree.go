@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func main() {
+func PlayingWithBTree() {
 	btree := utils.BTree{}
 	firstId := "123"
 	secondId := "456"
