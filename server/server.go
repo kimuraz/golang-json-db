@@ -27,6 +27,12 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 		buffer := make([]byte, 1024)
 		n, err := c.Conn.Read(buffer)
 		if err != nil {
+			if err.Error() == "EOF" {
+				messages <- fmt.Sprintf("Client %s disconnected", c.Conn.RemoteAddr().String())
+				c.Conn.Close()
+				c.Conn = nil
+				break
+			}
 			messages <- fmt.Sprintf("Error reading from client: %s", err.Error())
 			break
 		}
@@ -76,6 +82,16 @@ func (s *Server) ListenCli() {
 	}
 }
 
+func (s *Server) ListenDisconnect() {
+	for {
+		for i, c := range s.Clients {
+			if c.Conn == nil {
+				s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
+			}
+		}
+	}
+}
+
 func NewServer(port int) *Server {
 	return &Server{
 		Clients:     make([]*ServerClient, 0),
@@ -91,6 +107,7 @@ func (s *Server) StartServer() {
 	defer ln.Close()
 
 	go s.ListenCli()
+	go s.ListenDisconnect()
 
 	for {
 		conn, err := ln.Accept()

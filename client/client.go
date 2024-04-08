@@ -49,7 +49,7 @@ func (c *Client) Connect(port string) {
 		}
 
 		for {
-			time.Sleep(1 * time.Second)
+			time.Sleep(300 * time.Millisecond)
 			buffer := make([]byte, 1024)
 			n, err := (c.Conn).Read(buffer)
 			if err != nil {
