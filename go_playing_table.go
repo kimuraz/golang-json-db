@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	table2 "github.com/kimuraz/golang-json-db/table"
 	"math/rand"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ func randomString(length int) string {
 }
 
 func PlayingWithTables() {
-	table, err := NewTable("test", `{ "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "integer" }, "cost": { "type": "number" } }, "required": [ "id", "name", "value" ] }`)
+	table, err := table2.NewTable("test", `{ "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "integer" }, "cost": { "type": "number" } }, "required": [ "id", "name", "value" ] }`)
 	if err != nil {
 		panic(err)
 	}
