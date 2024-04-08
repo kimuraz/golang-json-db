@@ -26,6 +26,7 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 	for {
 		buffer := make([]byte, 1024)
 		n, err := c.Conn.Read(buffer)
+		fmt.Println("Received: ", string(buffer[:n]))
 		if err != nil {
 			if err.Error() == "EOF" {
 				messages <- fmt.Sprintf("Client %s disconnected", c.Conn.RemoteAddr().String())
@@ -40,11 +41,18 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 		c.Received = append(c.Received, message)
 
 		sqlCommand, err := sql.NewSqlCommand(message)
+		fmt.Printf("SQL Command: %+v\n", sqlCommand)
 		if err != nil {
+			fmt.Println("Error parsing command: ", err.Error())
 			c.Conn.Write([]byte(fmt.Sprintf("Error parsing command: %s\n", err.Error())))
 			continue
 		}
 
+		fmt.Println("SQL Command: ", sqlCommand.SQL)
+		// Print connection
+		fmt.Println("Connection: ", c.Conn.RemoteAddr().String())
+		fmt.Println("Received: ", c.Received)
+		fmt.Printf("%v", c.Conn)
 		c.Conn.Write([]byte("Accepted: " + sqlCommand.SQL + "\n"))
 	}
 }

@@ -7,18 +7,14 @@ import (
 	"net"
 	"os"
 	"strings"
-	"time"
 )
 
 type Client struct {
-	Conn        net.Conn
-	MessageChan chan string
+	Conn net.Conn
 }
 
 func NewClient() *Client {
-	return &Client{
-		MessageChan: make(chan string),
-	}
+	return &Client{}
 }
 
 func (c *Client) Connect(port string) {
@@ -27,6 +23,7 @@ func (c *Client) Connect(port string) {
 		panic(err)
 	}
 	c.Conn = conn
+	defer c.Conn.Close()
 
 	log.Info().Msgf("Connection established on server %s\n", c.Conn.RemoteAddr())
 	for {
@@ -48,16 +45,12 @@ func (c *Client) Connect(port string) {
 			os.Exit(1)
 		}
 
-		for {
-			time.Sleep(300 * time.Millisecond)
-			buffer := make([]byte, 1024)
-			n, err := (c.Conn).Read(buffer)
-			if err != nil {
-				log.Error().Msgf("Error reading from server: %s", err.Error())
-				os.Exit(1)
-			}
-			log.Print(string(buffer[:n]))
-			break
+		buffer := make([]byte, 1024)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Error().Msgf("Error reading from server: %s", err.Error())
+			os.Exit(1)
 		}
+		log.Info().Msgf("SERVER: %s\n", string(buffer[:n]))
 	}
 }

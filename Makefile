@@ -9,7 +9,7 @@ run-server:
 	go run . server start
 
 run-client:
-	go run . client start
+	go run . client connect 9875
 
 cli-help:
 	go run . help
