@@ -40,20 +40,14 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 		message := strings.Trim(string(buffer[:n]), " ")
 		c.Received = append(c.Received, message)
 
-		sqlCommand, err := sql.NewSqlCommand(message)
-		fmt.Printf("SQL Command: %+v\n", sqlCommand)
+		_, err = sql.SQLToAction(message)
 		if err != nil {
 			fmt.Println("Error parsing command: ", err.Error())
 			c.Conn.Write([]byte(fmt.Sprintf("Error parsing command: %s\n", err.Error())))
 			continue
 		}
 
-		fmt.Println("SQL Command: ", sqlCommand.SQL)
-		// Print connection
-		fmt.Println("Connection: ", c.Conn.RemoteAddr().String())
-		fmt.Println("Received: ", c.Received)
-		fmt.Printf("%v", c.Conn)
-		c.Conn.Write([]byte("Accepted: " + sqlCommand.SQL + "\n"))
+		c.Conn.Write([]byte("Accepted: %s" + message + "\n"))
 	}
 }
 

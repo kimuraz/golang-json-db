@@ -1,111 +1,78 @@
 package sql
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
+	"github.com/xwb1989/sqlparser"
+	"github.com/xwb1989/sqlparser/dependency/sqltypes"
 )
 
 // TODO: Check this https://marianogappa.github.io/software/2019/06/05/lets-build-a-sql-parser-in-go/
 // TODO: Also this https://github.com/xwb1989/sqlparser?tab=readme-ov-file
 
-type SQLCommand struct {
-	SQL          string   `json:"sql"`
-	Verb         string   `json:"verb"`
-	TableName    string   `json:"table_name"`
-	Columns      []string `json:"columns"`
-	ColumnsTypes []string `json:"columns_types"`
-	Where        string   `json:"where"`
-	WhereArgs    []string `json:"where_args"`
+func CreateTable(name string, schema string) (interface{}, error) {
+	return nil, nil
 }
 
-var validVerbs = []string{"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER"}
+func ColumnsToSchema(columns []*sqlparser.ColumnDefinition) (string, error) {
+	schema := make(map[string]interface{})
+	schema["type"] = "object"
+	schema["properties"] = make(map[string]interface{})
 
-var validColumnTypes = []string{"INT", "VARCHAR", "TEXT", "FLOAT", "BOOLEAN", "UUID"}
+	for _, column := range columns {
+		switch column.Type.SQLType() {
+		case sqltypes.Int8:
+			fallthrough
+		case sqltypes.Int16:
+			fallthrough
+		case sqltypes.Int24:
+			fallthrough
+		case sqltypes.Int32:
+			fallthrough
+		case sqltypes.Int64:
+			schema["properties"].(map[string]interface{})[column.Name.String()] = map[string]interface{}{"type": "integer"}
+		case sqltypes.Text:
+			fallthrough
+		case sqltypes.VarChar:
+			fallthrough
+		case sqltypes.Char:
+			schema["properties"].(map[string]interface{})[column.Name.String()] = map[string]interface{}{"type": "string"}
+		case sqltypes.Decimal:
+			fallthrough
+		case sqltypes.Float32:
+			fallthrough
+		case sqltypes.Float64:
+			schema["properties"].(map[string]interface{})[column.Name.String()] = map[string]interface{}{"type": "number"}
+		default:
+			return "", fmt.Errorf("Unsupported type: %s", column.Type.SQLType())
+		}
+	}
+	fmt.Println(schema)
+	json, err := json.Marshal(schema)
 
-func NewSqlCommand(sql string) (*SQLCommand, error) {
-	command := SQLCommand{SQL: sql}
-	return &command, command.ParseFromString()
+	return string(json), err
 }
 
-func (c *SQLCommand) String() string {
-	return c.SQL
-}
+func SQLToAction(sql string) (map[string]interface{}, error) {
+	response := make(map[string]interface{})
+	stmt, err := sqlparser.Parse(sql)
 
-func (c *SQLCommand) ParseCreateTable() error {
-	words := strings.Fields(c.SQL)
-	if len(words) < 4 {
-		return fmt.Errorf("Invalid SQL command")
+	if err != nil {
+		return nil, err
 	}
 
-	c.Verb = "CREATE"
-	c.TableName = words[2]
-
-	// Find the columns
-	var columns []string
-	var columnsTypes []string
-
-	columnsDefinition := strings.Join(words[3:], " ")
-	columnsDefinition = strings.TrimLeft(columnsDefinition, "(")
-	columnsDefinition = strings.TrimRight(columnsDefinition, ")")
-
-	for _, pair := range strings.Split(columnsDefinition, ",") {
-		pairNameType := strings.Split(pair, " ")
-		if len(pairNameType) != 2 {
-			return fmt.Errorf("Invalid column definition on table creation %s", pair)
+	switch stmt := stmt.(type) {
+	case *sqlparser.CreateTable:
+		_ = stmt
+		schema, err := ColumnsToSchema(stmt.Columns)
+		if err != nil {
+			return nil, err
 		}
-		if pairNameType[0] == "" || pairNameType[1] == "" {
-			return fmt.Errorf("Column name or type is empty on table creation %s %s", pairNameType[0], pairNameType[1])
-		}
-		for i, validColumnType := range validColumnTypes {
-			if strings.ToUpper(pairNameType[1]) == validColumnType {
-				break
-			}
-			if i == len(validColumnTypes)-1 {
-				return fmt.Errorf("Invalid column type %s for column %s on table creation", pairNameType[1], pairNameType[0])
-			}
-		}
+		response["schema"] = schema
+	case *sqlparser.Insert:
+		_ = stmt
 
-		column := pairNameType[0]
-		columnType := pairNameType[1]
-
-		columns = append(columns, column)
-		columnsTypes = append(columnsTypes, columnType)
 	}
-	c.Columns = columns
-	c.ColumnsTypes = columnsTypes
-
-	return nil
-}
-
-func (c *SQLCommand) ParseFromString() error {
-	words := strings.Fields(c.SQL)
-
-	if len(words) == 0 {
-		return fmt.Errorf("Empty SQL command")
-	}
-
-	var verb string
-	for _, validVerb := range validVerbs {
-		if strings.ToUpper(words[0]) == validVerb {
-			verb = validVerb
-			break
-		}
-	}
-
-	if verb == "" {
-		return fmt.Errorf("Unknown SQL command %s", words[0])
-	}
-
-	if verb == "CREATE" {
-		if len(words) < 3 {
-			return fmt.Errorf("Invalid syntax for CREATE command")
-		}
-		if strings.ToUpper(words[1]) == "TABLE" {
-			return c.ParseCreateTable()
-		} else {
-			return fmt.Errorf("Invalid SQL command")
-		}
-	}
-
-	return nil
+	response["ok"] = true
+	return response, nil
 }
