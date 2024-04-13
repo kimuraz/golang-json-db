@@ -27,6 +27,10 @@ func (c *Client) Connect(port string) {
 
 	log.Info().Msgf("Connection established on server %s\n", c.Conn.RemoteAddr())
 	for {
+		if conn == nil {
+			panic("Connection dropped")
+			os.Exit(1)
+		}
 		fmt.Print("> ")
 		reader := bufio.NewReader(os.Stdin)
 		query, err := reader.ReadString('\n')
@@ -38,12 +42,7 @@ func (c *Client) Connect(port string) {
 
 		query = strings.Replace(query, "\n", "", -1)
 
-		if conn != nil {
-			conn.Write([]byte(query))
-		} else {
-			panic("Connection dropped")
-			os.Exit(1)
-		}
+		conn.Write([]byte(query))
 
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)

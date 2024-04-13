@@ -1,8 +1,10 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/kimuraz/golang-json-db/sql"
+	"github.com/rs/zerolog/log"
 	"net"
 	"os"
 	"strconv"
@@ -26,7 +28,6 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 	for {
 		buffer := make([]byte, 1024)
 		n, err := c.Conn.Read(buffer)
-		fmt.Println("Received: ", string(buffer[:n]))
 		if err != nil {
 			if err.Error() == "EOF" {
 				messages <- fmt.Sprintf("Client %s disconnected", c.Conn.RemoteAddr().String())
@@ -38,16 +39,21 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 			break
 		}
 		message := strings.Trim(string(buffer[:n]), " ")
+		messages <- fmt.Sprintf("[%s]: %s", c.Conn.RemoteAddr(), message)
 		c.Received = append(c.Received, message)
 
-		_, err = sql.SQLToAction(message)
+		res, err := sql.SQLToAction(message)
+		jsonRes, err := json.Marshal(res)
 		if err != nil {
-			fmt.Println("Error parsing command: ", err.Error())
+			if jsonRes != nil {
+				c.Conn.Write(jsonRes)
+			}
+			log.Err(err)
 			c.Conn.Write([]byte(fmt.Sprintf("Error parsing command: %s\n", err.Error())))
 			continue
 		}
 
-		c.Conn.Write([]byte("Accepted: %s" + message + "\n"))
+		c.Conn.Write(jsonRes)
 	}
 }
 
