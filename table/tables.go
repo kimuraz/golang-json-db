@@ -1,11 +1,14 @@
 package table
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"github.com/xeipuuv/gojsonschema"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -30,6 +33,10 @@ type JSONProperty struct {
 type JSONSchemaForValidation struct {
 	Properties map[string]JSONProperty `json:"properties"`
 }
+
+// For now I'll use a fixed size (Bytes) for the json objects data
+// but soon I'll implement a dynamic size
+var MAX_SIZE = 128
 
 func NewTable(name string, schema string) (*Table, error) {
 	// Check if name is valid new directory name
@@ -113,6 +120,74 @@ func NewTable(name string, schema string) (*Table, error) {
 	return table, nil
 }
 
+func GetTable(name string) (*Table, error) {
+	_, err := os.Stat(fmt.Sprintf("./data/%s", name))
+	if err != nil {
+		return nil, fmt.Errorf("Table with name %s does not exist", name)
+	}
+
+	schema, err := os.ReadFile(fmt.Sprintf("./data/%s/schema.json", name))
+	if err != nil {
+		return nil, fmt.Errorf("Error reading schema file: %s", err)
+	}
+
+	table := &Table{
+		name:          name,
+		path:          fmt.Sprintf("./data/%s", name),
+		schema:        string(schema),
+		ids:           make(map[string][2]uint64),
+		boolIndexes:   make(map[string]*HashIndex[bool]),
+		intIndexes:    make(map[string]*HashIndex[int64]),
+		floatIndexes:  make(map[string]*HashIndex[float64]),
+		stringIndexes: make(map[string]*BTreeStringIndex),
+	}
+
+	table.LoadIndexes(&sync.Mutex{})
+
+	return table, nil
+}
+
+func (t *Table) GetColumnNames() ([]string, error) {
+	var jsonSchema JSONSchemaForValidation
+	err := json.Unmarshal([]byte(t.schema), &jsonSchema)
+	if err != nil {
+		return nil, fmt.Errorf("Error unmarshalling schema: %s", err)
+	}
+	var columns []string
+	for key := range jsonSchema.Properties {
+		columns = append(columns, key)
+	}
+	return columns, nil
+}
+
+func (t *Table) updateIds() error {
+	f, err := os.OpenFile(fmt.Sprintf("./data/%s/indexes/id_idx.bin", t.name), os.O_WRONLY, 0644)
+	defer f.Close()
+	if err != nil {
+		return fmt.Errorf("Error opening id index file: %s", err)
+	}
+	enc := gob.NewEncoder(f)
+	err = enc.Encode(t.ids)
+	if err != nil {
+		return fmt.Errorf("Error encoding id index: %s", err)
+	}
+
+	return nil
+}
+
+func (t *Table) loadIds() error {
+	file, err := os.OpenFile(fmt.Sprintf("./data/%s/indexes/id_idx.bin", t.name), os.O_RDONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("Error reading id index file: %s", err)
+	}
+	decoder := gob.NewDecoder(file)
+	err = decoder.Decode(&t.ids)
+	if err != nil {
+		return fmt.Errorf("Error decoding id index: %s", err)
+	}
+	return nil
+}
+
 func (t *Table) ValidateInsertToSchema(data string) (bool, error) {
 	schemaLoader := gojsonschema.NewStringLoader(t.schema)
 	dataLoader := gojsonschema.NewStringLoader(data)
@@ -132,12 +207,54 @@ func (t *Table) ValidateInsertToSchema(data string) (bool, error) {
 // tableName/indexes/f_[attr]_idx.bin
 // tableName/indexes/s_[attr]_idx.bin
 
-func (t *Table) LoadIndexes(m *sync.Mutex) {
+func (t *Table) LoadIndexes(m *sync.Mutex) error {
 	m.Lock()
-	// Load indexes
-	os.ReadDir(fmt.Sprintf("./data/%s/indexes", t.name))
-	// Load id index from file
-	m.Unlock()
+	defer m.Unlock()
+	files, err := os.ReadDir(fmt.Sprintf("./data/%s/indexes", t.name))
+	if err != nil {
+		return fmt.Errorf("Error reading indexes directory: %s", err)
+	}
+	for _, file := range files {
+		if strings.Contains(file.Name(), "id_idx.bin") {
+			err = t.loadIds()
+			if err != nil {
+				return fmt.Errorf("Error loading id index: %s", err)
+			}
+		}
+		if strings.Contains(file.Name(), "b_") {
+			idx := NewHashIndex[bool]()
+			err = idx.LoadFromFile(fmt.Sprintf("./data/%s/indexes/%s", t.name, file.Name()))
+			if err != nil {
+				return fmt.Errorf("Error loading bool index: %s", err)
+			}
+			t.boolIndexes[strings.TrimPrefix(file.Name(), "b_")] = idx
+		}
+		if strings.Contains(file.Name(), "i_") {
+			idx := NewHashIndex[int64]()
+			err = idx.LoadFromFile(fmt.Sprintf("./data/%s/indexes/%s", t.name, file.Name()))
+			if err != nil {
+				return fmt.Errorf("Error loading int index: %s", err)
+			}
+			t.intIndexes[strings.TrimPrefix(file.Name(), "i_")] = idx
+		}
+		if strings.Contains(file.Name(), "f_") {
+			idx := NewHashIndex[float64]()
+			err = idx.LoadFromFile(fmt.Sprintf("./data/%s/indexes/%s", t.name, file.Name()))
+			if err != nil {
+				return fmt.Errorf("Error loading float index: %s", err)
+			}
+			t.floatIndexes[strings.TrimPrefix(file.Name(), "f_")] = idx
+		}
+		if strings.Contains(file.Name(), "s_") {
+			idx := NewBTreeStringIndex()
+			err = idx.LoadFromFile(fmt.Sprintf("./data/%s/indexes/%s", t.name, file.Name()))
+			if err != nil {
+				return fmt.Errorf("Error loading string index: %s", err)
+			}
+			t.stringIndexes[strings.TrimPrefix(file.Name(), "s_")] = idx
+		}
+	}
+	return nil
 }
 
 func (t *Table) Insert(data string) error {
@@ -151,17 +268,16 @@ func (t *Table) Insert(data string) error {
 	}
 
 	// Append data to data.bin file
-	f, err := os.OpenFile(fmt.Sprintf("./data/%s/data.bin", t.name), os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("./data/%s/data.bin", t.name), os.O_WRONLY|os.O_APPEND, 0644)
 	defer f.Close()
-	filePointerPosition, err := f.Seek(0, 2)
+	filePointerPosition, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return fmt.Errorf("Error opening data file: %s", err)
 	}
-	strBytes := []byte(data)
-	err = binary.Write(f, binary.LittleEndian, uint64(len(strBytes)))
-	if err != nil {
-		return fmt.Errorf("Error writing data to file: %s", err)
+	if len(data) > MAX_SIZE {
+		return fmt.Errorf("string exceeds fixed size: %s", data)
 	}
+	strBytes := []byte(padString(data, MAX_SIZE))
 	err = binary.Write(f, binary.LittleEndian, strBytes)
 	if err != nil {
 		return fmt.Errorf("Error writing data to file: %s", err)
@@ -175,9 +291,15 @@ func (t *Table) Insert(data string) error {
 		return fmt.Errorf("Error unmarshalling data: %s", err)
 	}
 
-	t.IndexData(jsonData, filePointerPosition, len(strBytes))
+	return t.IndexData(jsonData, filePointerPosition, len(strBytes))
+}
 
-	return nil
+func padString(str string, size int) string {
+	if len(str) >= size {
+		return str
+	}
+	padding := make([]byte, size-len(str))
+	return str + string(padding)
 }
 
 func (t *Table) SelectAll() ([]map[string]interface{}, error) {
@@ -190,17 +312,17 @@ func (t *Table) SelectAll() ([]map[string]interface{}, error) {
 
 	// Read data file
 	var data []map[string]interface{}
+	buf := make([]byte, MAX_SIZE)
 	for {
-		var dataLen uint64
-		err = binary.Read(f, binary.LittleEndian, &dataLen)
-		if err != nil {
+		err := binary.Read(f, binary.LittleEndian, &buf)
+		if err == io.EOF {
 			break
 		}
-		dataBytes := make([]byte, dataLen)
-		err = binary.Read(f, binary.LittleEndian, &dataBytes)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading data from file: %s", err)
+			log.Error().Err(err).Msg(fmt.Sprintf("Error reading data file: %s", f.Name()))
+			return nil, fmt.Errorf("Error reading data file: %s", err)
 		}
+		dataBytes := bytes.Trim(buf, "\x00")
 		var jsonData map[string]interface{}
 		err = json.Unmarshal(dataBytes, &jsonData)
 		if err != nil {
@@ -220,11 +342,13 @@ func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition i
 		return fmt.Errorf("Error unmarshalling schema: %s", err)
 	}
 
-	id := jsonData["id"].(string)
+	// Hacky, but should work
+	id := fmt.Sprintf("%v", jsonData["id"])
 
 	for key, value := range jsonData {
 		if key == "id" {
-			t.ids[value.(string)] = [2]uint64{uint64(filePointerPosition), uint64(dataLen)}
+			t.ids[id] = [2]uint64{uint64(filePointerPosition), uint64(dataLen)}
+			t.updateIds()
 		} else {
 			// Load index
 			if jsonSchema.Properties[key].Type == "boolean" {
@@ -272,7 +396,7 @@ func (t *Table) IndexData(jsonData map[string]interface{}, filePointerPosition i
 func (t *Table) loadIdIndexFromFile(path string) (map[string]uint64, error) {
 	// Find file
 	index := make(map[string]uint64)
-	_, err := ioutil.ReadFile(fmt.Sprintf("./data/%s/indexes/id_idx.bin", t.name, path))
+	_, err := os.ReadFile(fmt.Sprintf("./data/%s/indexes/id_idx.bin", t.name, path))
 	if err != nil {
 		return index, fmt.Errorf("Error reading id index file: %s", err)
 	}

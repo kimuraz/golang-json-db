@@ -1,23 +1,27 @@
 package table
 
 import (
+	"encoding/gob"
 	"fmt"
 	"github.com/kimuraz/golang-json-db/utils"
 	"os"
 	"sync"
 )
 
+type GobIndex struct {
+	sync.Mutex
+}
 type Hashable interface {
 	int64 | float64 | bool
 }
 
 type HashIndex[T Hashable] struct {
-	sync.Mutex
+	GobIndex
 	hashIndex map[T][]string
 }
 
 type BTreeStringIndex struct {
-	sync.Mutex
+	GobIndex
 	bTree *utils.BTree
 }
 
@@ -66,37 +70,22 @@ func (hashIdx *HashIndex[T]) Print() {
 	}
 }
 
-func (hashIdx *HashIndex[T]) SaveToFile(fileName string) {
-	hashIdx.Lock()
-	f, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer f.Close()
+func (gobIndex *GobIndex) SaveToFile(fileName string) error {
+	gobIndex.Lock()
+	defer gobIndex.Unlock()
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	keyBytes := make([]byte, len(hashIdx.hashIndex))
-	for k, v := range hashIdx.hashIndex {
-		keyBytes = append(keyBytes, []byte(fmt.Sprintf("%v", k))...)
-		for _, id := range v {
-			keyBytes = append(keyBytes, []byte(fmt.Sprintf("%v", id))...)
-		}
-	}
-	if _, err = f.Write(keyBytes); err != nil {
-		fmt.Println(err)
-	}
-	hashIdx.Unlock()
+	encoder := gob.NewEncoder(file)
+	return encoder.Encode(gobIndex)
 }
 
-func (hashIdx *HashIndex[T]) LoadFromFile(fileName string) {
-	f, err := os.OpenFile(fileName, os.O_RDONLY, 0644)
-	defer f.Close()
+func (gobIndex *GobIndex) LoadFromFile(fileName string) error {
+	file, err := os.OpenFile(fileName, os.O_RDONLY, 0644)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	keyBytes := make([]byte, 8)
-	if _, err = f.Read(keyBytes); err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(keyBytes)
+	decoder := gob.NewDecoder(file)
+	return decoder.Decode(gobIndex)
 }

@@ -6,10 +6,144 @@ import (
 	"github.com/kimuraz/golang-json-db/table"
 	"github.com/xwb1989/sqlparser"
 	"github.com/xwb1989/sqlparser/dependency/sqltypes"
+	"strconv"
 )
 
-// TODO: Check this https://marianogappa.github.io/software/2019/06/05/lets-build-a-sql-parser-in-go/
-// TODO: Also this https://github.com/xwb1989/sqlparser?tab=readme-ov-file
+func SQLToAction(sql string) (map[string]interface{}, error) {
+	response := make(map[string]interface{})
+	stmt, err := sqlparser.Parse(sql)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch stmt := stmt.(type) {
+	case *sqlparser.DDL:
+		_ = stmt
+		response["table"] = stmt.NewName.Name.CompliantName()
+		switch stmt.Action {
+
+		case sqlparser.CreateStr:
+			if stmt.TableSpec == nil {
+				return nil, fmt.Errorf("Cannot parse table specification")
+			}
+			schema, err := ColumnsToSchema(stmt.TableSpec.Columns)
+			if err != nil {
+				return nil, err
+			}
+			response["schema"] = schema
+			_, err = table.NewTable(stmt.NewName.Name.CompliantName(), schema)
+
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+		default:
+			return nil, fmt.Errorf("Unsupported action: %s", stmt.Action)
+		}
+
+	case *sqlparser.Insert:
+		_ = stmt
+		response["table"] = stmt.Table.Name.CompliantName()
+		table, err := table.GetTable(stmt.Table.Name.CompliantName())
+		if err != nil {
+			response["ok"] = false
+			return response, err
+		}
+		defaultColumnNames, err := table.GetColumnNames()
+		if err != nil {
+			response["ok"] = false
+			return response, err
+		}
+		insertJson := InsertSqlToJSON(stmt, defaultColumnNames)
+		for _, row := range insertJson.([]map[string]interface{}) {
+			jsonStr, err := json.Marshal(row)
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+			fmt.Println(string(jsonStr))
+			err = table.Insert(string(jsonStr))
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+		}
+		response["ok"] = true
+		return response, nil
+
+	case *sqlparser.Select:
+		_ = stmt
+		response["table"] = stmt.From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.CompliantName()
+		table, err := table.GetTable(stmt.From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.CompliantName())
+		if err != nil {
+			response["ok"] = false
+			return response, err
+		}
+		result, err := table.SelectAll()
+		if err != nil {
+			response["ok"] = false
+			return response, err
+		}
+		resToJson, err := json.Marshal(result)
+		if err != nil {
+			response["ok"] = false
+			return response, err
+		}
+		response["result"] = string(resToJson)
+	}
+	response["ok"] = true
+	return response, nil
+}
+
+func InsertSqlToJSON(stmt *sqlparser.Insert, defaultColumnNames []string) interface{} {
+	values := make([]map[string]interface{}, 0)
+	columnsNames := make([]string, 0)
+	if len(stmt.Columns) == 0 {
+		columnsNames = defaultColumnNames
+	} else {
+		for _, column := range stmt.Columns {
+			columnsNames = append(columnsNames, column.CompliantName())
+		}
+	}
+	for _, row := range stmt.Rows.(sqlparser.Values) {
+		jsonObject := make(map[string]interface{})
+		for i, val := range row {
+			columnName := columnsNames[i]
+			jsonObject[columnName] = extractValue(val)
+		}
+		values = append(values, jsonObject)
+	}
+	return values
+}
+
+func extractValue(val sqlparser.Expr) interface{} {
+	switch v := val.(type) {
+	case *sqlparser.SQLVal:
+		switch v.Type {
+		case sqlparser.StrVal:
+			return string(v.Val)
+		case sqlparser.IntVal:
+			intVal, err := strconv.ParseInt(string(v.Val), 10, 64)
+			if err != nil {
+				return string(v.Val)
+			}
+			return intVal
+		case sqlparser.FloatVal:
+			floatVal, err := strconv.ParseFloat(string(v.Val), 64)
+			if err != nil {
+				return string(v.Val)
+			}
+			return floatVal
+		default:
+			return string(v.Val)
+		}
+	case *sqlparser.NullVal:
+		return nil
+	default:
+		return sqlparser.String(val)
+	}
+}
 
 func ColumnsToSchema(columns []*sqlparser.ColumnDefinition) (string, error) {
 	schema := make(map[string]interface{})
@@ -47,45 +181,4 @@ func ColumnsToSchema(columns []*sqlparser.ColumnDefinition) (string, error) {
 	json, err := json.Marshal(schema)
 
 	return string(json), err
-}
-
-func SQLToAction(sql string) (map[string]interface{}, error) {
-	response := make(map[string]interface{})
-	stmt, err := sqlparser.Parse(sql)
-
-	if err != nil {
-		return nil, err
-	}
-
-	switch stmt := stmt.(type) {
-	case *sqlparser.DDL:
-		_ = stmt
-		response["table"] = stmt.NewName.Name.CompliantName()
-		switch stmt.Action {
-
-		case sqlparser.CreateStr:
-			if stmt.TableSpec == nil {
-				return nil, fmt.Errorf("Cannot parse table specification")
-			}
-			schema, err := ColumnsToSchema(stmt.TableSpec.Columns)
-			if err != nil {
-				return nil, err
-			}
-			response["schema"] = schema
-			_, err = table.NewTable(stmt.NewName.Name.CompliantName(), schema)
-
-			if err != nil {
-				response["ok"] = false
-				return response, err
-			}
-		default:
-			return nil, fmt.Errorf("Unsupported action: %s", stmt.Action)
-		}
-
-	case *sqlparser.Insert:
-		_ = stmt
-
-	}
-	response["ok"] = true
-	return response, nil
 }
