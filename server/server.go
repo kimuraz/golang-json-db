@@ -43,14 +43,10 @@ func (c *ServerClient) ReadLoop(messages chan string) {
 		c.Received = append(c.Received, message)
 
 		res, err := sql.SQLToAction(message)
-		jsonRes, err := json.Marshal(res)
+		jsonRes, _ := json.Marshal(res)
 		if err != nil {
-			if jsonRes != nil {
-				c.Conn.Write(jsonRes)
-			}
 			log.Err(err)
 			c.Conn.Write([]byte(fmt.Sprintf("Error parsing command: %s\n", err.Error())))
-			continue
 		}
 
 		c.Conn.Write(jsonRes)

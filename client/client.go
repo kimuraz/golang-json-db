@@ -50,6 +50,11 @@ func (c *Client) Connect(port string) {
 			log.Error().Msgf("Error reading from server: %s", err.Error())
 			os.Exit(1)
 		}
-		log.Info().Msgf("SERVER: %s\n", string(buffer[:n]))
+		srvMsg := fmt.Sprintf("SERVER: %s\n", string(buffer[:n]))
+		if strings.Contains(srvMsg, "\"ok\":false") {
+			log.Error().Msgf(srvMsg)
+		} else {
+			log.Info().Msgf(srvMsg)
+		}
 	}
 }

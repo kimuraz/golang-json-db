@@ -60,7 +60,10 @@ func SQLToAction(sql string) (map[string]interface{}, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.DDL:
 		_ = stmt
-		if stmt.Action == sqlparser.CreateStr {
+		response["table"] = stmt.NewName.Name.CompliantName()
+		switch stmt.Action {
+
+		case sqlparser.CreateStr:
 			if stmt.TableSpec == nil {
 				return nil, fmt.Errorf("Cannot parse table specification")
 			}
@@ -69,17 +72,16 @@ func SQLToAction(sql string) (map[string]interface{}, error) {
 				return nil, err
 			}
 			response["schema"] = schema
-			response["table"] = stmt.NewName.Name.CompliantName()
 			_, err = table.NewTable(stmt.NewName.Name.CompliantName(), schema)
 
 			if err != nil {
 				response["ok"] = false
 				return response, err
 			}
-
-		} else {
+		default:
 			return nil, fmt.Errorf("Unsupported action: %s", stmt.Action)
 		}
+
 	case *sqlparser.Insert:
 		_ = stmt
 
