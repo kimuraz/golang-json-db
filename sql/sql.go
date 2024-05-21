@@ -62,7 +62,6 @@ func SQLToAction(sql string) (map[string]interface{}, error) {
 				response["ok"] = false
 				return response, err
 			}
-			fmt.Println(string(jsonStr))
 			err = table.Insert(string(jsonStr))
 			if err != nil {
 				response["ok"] = false
@@ -75,25 +74,75 @@ func SQLToAction(sql string) (map[string]interface{}, error) {
 	case *sqlparser.Select:
 		_ = stmt
 		response["table"] = stmt.From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.CompliantName()
-		table, err := table.GetTable(stmt.From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.CompliantName())
+		t, err := table.GetTable(stmt.From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.CompliantName())
 		if err != nil {
 			response["ok"] = false
 			return response, err
 		}
-		result, err := table.SelectAll()
-		if err != nil {
-			response["ok"] = false
-			return response, err
+		if stmt.Where == nil {
+			result, err := t.SelectAll()
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+			resToJson, err := json.Marshal(result)
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+			response["result"] = string(resToJson)
+		} else {
+			whereClauses := parseWhereExpr(stmt.Where.Expr)
+			result, err := t.SelectWhere(*whereClauses)
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+			resToJson, err := json.Marshal(result)
+			if err != nil {
+				response["ok"] = false
+				return response, err
+			}
+			response["result"] = string(resToJson)
 		}
-		resToJson, err := json.Marshal(result)
-		if err != nil {
-			response["ok"] = false
-			return response, err
-		}
-		response["result"] = string(resToJson)
 	}
 	response["ok"] = true
 	return response, nil
+}
+
+func parseWhereExpr(expr sqlparser.Expr) *table.WhereClause {
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		return &table.WhereClause{
+			Column:   sqlparser.String(expr.Left),
+			Operator: expr.Operator,
+			Value:    extractValue(expr.Right),
+		}
+	case *sqlparser.AndExpr:
+		left := parseWhereExpr(expr.Left)
+		right := parseWhereExpr(expr.Right)
+		if left != nil && right != nil {
+			andClause := left
+			for andClause.And != nil {
+				andClause = andClause.And
+			}
+			andClause.And = right
+		}
+		return left
+	case *sqlparser.OrExpr:
+		left := parseWhereExpr(expr.Left)
+		right := parseWhereExpr(expr.Right)
+		if left != nil && right != nil {
+			orClause := left
+			for orClause.Or != nil {
+				orClause = orClause.Or
+			}
+			orClause.Or = right
+		}
+		return left
+	default:
+		return nil
+	}
 }
 
 func InsertSqlToJSON(stmt *sqlparser.Insert, defaultColumnNames []string) interface{} {

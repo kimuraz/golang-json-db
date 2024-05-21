@@ -1,9 +1,12 @@
 package server
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"github.com/kimuraz/golang-json-db/sql"
+	"github.com/kimuraz/golang-json-db/table"
+	"github.com/kimuraz/golang-json-db/utils"
 	"github.com/rs/zerolog/log"
 	"net"
 	"os"
@@ -105,6 +108,11 @@ func NewServer(port int) *Server {
 }
 
 func (s *Server) StartServer() {
+	gob.Register(table.GobIndex{})
+	gob.Register(table.BTreeStringIndex{})
+	gob.Register(utils.BTree{})
+	gob.Register(utils.BTreeNode{})
+
 	portStr := strconv.Itoa(s.Port)
 	s.MessageChan <- fmt.Sprintf("Starting server on port %s...", portStr)
 	ln, _ := net.Listen("tcp", ":"+portStr)
